@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: quran-hadith-detector
+    runtime: docker
+    plan: 1c-2g
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 10000
