@@ -14,30 +14,6 @@
       "collection": "muslim",
       "path": "Sahih_Muslim/sahih_muslim_ahadith_mushakkala_mufassala.utf8.csv",
       "sha256": "79232c8d7c27fef161d8f33ca169f9754741cfe14957dde2ac76893374998943"
-    },
-    {
-      "name": "abudawud",
-      "collection": "abudawud",
-      "path": "Sunan_Abu-Dawud/sunan_abu-dawud_ahadith_mushakkala_mufassala.utf8.csv",
-      "sha256": "68918ef593d5154d38c1d00bad3ae8237510cb35eeb3ebf22b4a1f9fa3b2799f"
-    },
-    {
-      "name": "tirmidhi",
-      "collection": "tirmidhi",
-      "path": "Sunan_Al-Tirmidhi/sunan_al-tirmidhi_ahadith_mushakkala_mufassala.utf8.csv",
-      "sha256": "136b4467116a59dd81b9633306960898d6f8fd34c3a3aa3579d2d0ba130b3ce9"
-    },
-    {
-      "name": "nasai",
-      "collection": "nasai",
-      "path": "Sunan_Al-Nasai/sunan_al-nasai_ahadith_mushakkala_mufassala.utf8.csv",
-      "sha256": "21d677b02a39722f039f9a79f06706e71a0a09a18cc1aa71df6f90d994bf11c2"
-    },
-    {
-      "name": "ibnmajah",
-      "collection": "ibnmajah",
-      "path": "Sunan_Ibn-Maja/sunan_ibn-maja_ahadith_mushakkala_mufassala.utf8.csv",
-      "sha256": "88b2fec03dbaff0b6d8e36d9b4b3989d1526a0aa8f81a8cdd56e1de95a7d5f68"
     }
   ]
 }

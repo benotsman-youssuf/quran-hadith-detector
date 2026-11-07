@@ -4,7 +4,7 @@ One HTTP API over two offline libraries:
 
 - [`quran-detector`](https://pypi.org/project/quran-detector/) – rewrite of QDetect (El-Beltagy & Rafea, 2021)
 - `hadith_engine` – vendored MIT detector (from [`RayenFekih/hadith-detector`](https://github.com/RayenFekih/hadith-detector))
-  matching the six canonical hadith books
+  matching Sahih al-Bukhari and Sahih Muslim
 
 Everything runs locally; no API keys and no network calls at runtime.
 
@@ -21,20 +21,37 @@ uvicorn app:app --host 0.0.0.0 --port 8000     # UI: http://localhost:8000/   AP
 python -m pytest -q
 ```
 
-The corpus build downloads about 130 MB of CSV, verifies SHA-256, and the index build takes roughly
-1–2 minutes and produces a ~130 MB runtime index. Docker does both steps automatically:
+The corpus build downloads about 50 MB of CSV, verifies SHA-256, and the index build takes roughly
+1–2 minutes and produces a compact runtime index. Docker does both steps automatically:
 
 ```bash
 docker build -t qh-detector .
 docker run -p 8000:8000 qh-detector
 ```
 
-## Deploy on Render
+## Expose it publicly
 
-`render.yaml` defines a Docker web service with health check `/health`. The two in-memory
-engines use roughly 700 MB once loaded, so use a 2 GB plan (`1c-2g`); Render's 512 MB free
-plan will be OOM-killed during startup. The container binds to `$PORT` (Render sets it to
-`10000`), and startup takes about 20–25 seconds while the hadith index is read.
+The loaded engines use about 550 MB RSS, so run the server on a machine with at least 1 GB free
+and put a tunnel in front of it. `tools/serve_public.sh` starts Uvicorn on `127.0.0.1` and a
+Cloudflare quick tunnel, then prints the public URL:
+
+```bash
+pip install -r requirements.txt
+python -m tools.prepare_hadith
+python -m tools.build_index --corpus-dir data/prepared --output-dir hadith_engine/_data
+CLOUDFLARED=/path/to/cloudflared PYTHON=.venv/bin/python tools/serve_public.sh
+```
+
+Install `cloudflared` from the
+[Cloudflare Tunnel docs](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/).
+Quick tunnels need no account, but they have no uptime guarantee and the `trycloudflare.com`
+hostname changes whenever the process restarts. For a stable hostname, use a named Cloudflare
+tunnel with your own domain.
+
+`render.yaml` is still included as an alternative: it defines a Docker web service with health
+check `/health`. The container binds to `$PORT`, and the startup peak is about 550 MB, so use a
+plan with at least 1 GB (for example `1c-2g`); Render's 512 MB free plan is just below the
+measured requirement.
 
 Create a Blueprint from this repository in the Render dashboard, or create the service with
 the Render CLI:
@@ -49,18 +66,16 @@ render services create --name quran-hadith-detector --type web_service \
 ## Data
 
 The corpus is [`mhashim6/Open-Hadith-Data`](https://github.com/mhashim6/Open-Hadith-Data) at commit
-`1515f6c`, using the diacritised *mushakkala* files. Only the narration column is kept; the *Tafseel*
-commentary is discarded. The dataset is licensed under ODbL/DbCL; see `THIRD_PARTY_NOTICES.md`.
+`1515f6c`, using the diacritised *mushakkala* files and keeping only the two *Sahih* collections.
+Only the narration column is kept; the *Tafseel* commentary is discarded. Generated records and
+tokens are written as compact JSONL (short arrays and no repeated per-token keys). The dataset is
+licensed under ODbL/DbCL; see `THIRD_PARTY_NOTICES.md`.
 
 | Collection | Records |
 |---|---:|
 | Sahih al-Bukhari | 7,008 |
 | Sahih Muslim | 5,362 |
-| Sunan Abi Dawud | 4,590 |
-| Jami` at-Tirmidhi | 3,891 |
-| Sunan an-Nasa'i | 5,662 |
-| Sunan Ibn Majah | 4,332 |
-| **Total** | **30,845** |
+| **Total** | **12,370** |
 
 Hadith numbers follow this edition and are not identical to sunnah.com numbering, so the API returns
 `url: null` and the UI does not link to sunnah.com. No grades are included.
@@ -102,7 +117,7 @@ character offsets `start`/`end` into **your original text** (`text[start:end] ==
 `book_number`, `url`, `source_text`, `source`, `numbering`).
 
 `POST /detect/batch` takes `{"texts": [...]}` and returns one result per text.
-`GET /health` returns library versions, the six collection names, and limits.
+`GET /health` returns library versions, the two collection names, and limits.
 
 ## Options (all optional, per request)
 
@@ -128,7 +143,7 @@ Env vars: `MAX_TEXT_CHARS` (default 200000), `MAX_BATCH` (default 100), `HADITH_
   part of a verse. It may differ from a printed mushaf in places (for example it writes the opening letters of
   Surat al-Baqarah as «الم،»). For anything you publish, check against a mushaf.
 - Diacritic marks can be stored in a different order than you type them (shadda/fatha); compare with Unicode NFC.
-- Hadith coverage is the six canonical books only; a miss does not mean it is not a hadith.
+- Hadith coverage is Sahih al-Bukhari and Sahih Muslim only; a miss does not mean it is not a hadith.
 - Hadith numbering is Open-Hadith-Data's edition, not sunnah.com's; do not use the numbers as sunnah.com links.
 - A match is not an authentication of the quoted wording. The dataset is a digitisation, not a scholarly
   critical edition; verify anything you publish against a printed edition.

@@ -93,8 +93,8 @@ def load_corpus(path: Path) -> Corpus:
     if manifest.get("versions") != {
         "manifest": 1,
         "normalization": NORMALIZATION_VERSION,
-        "records": 1,
-        "tokens": 1,
+        "records": 2,
+        "tokens": 2,
     }:
         raise ValueError("Unsupported prepared-corpus formats")
     expected = {"records.jsonl", "tokens.jsonl", "validation.json"}
@@ -104,6 +104,11 @@ def load_corpus(path: Path) -> Corpus:
         if digest(path / name) != checksum:
             raise ValueError(f"Prepared-corpus checksum mismatch: {name}")
     records = [json.loads(line) for line in (path / "records.jsonl").open(encoding="utf-8")]
+    if any(
+        set(record) != {"hadith_key", "collection", "hadith_number", "seq", "text"}
+        for record in records
+    ):
+        raise ValueError("Unsupported prepared record schema")
     if records != sorted(records, key=lambda r: (r["collection"], r["seq"])):
         raise ValueError("Records are not in deterministic collection/sequence order")
     vocabulary: dict[str, int] = {}
@@ -113,7 +118,7 @@ def load_corpus(path: Path) -> Corpus:
             row = json.loads(line)
             if rid >= len(records) or row["hadith_key"] != records[rid]["hadith_key"]:
                 raise ValueError("Record/token identity mismatch")
-            tokens = tuple(Token(**t) for t in row["tokens"])
+            tokens = tuple(_compact_token(t) for t in row["tokens"])
             if tokens != tokenize(records[rid]["text"]).tokens:
                 raise ValueError("Prepared token/span validation failed")
             sequences.append(sequence(tokens, vocabulary, True))
@@ -121,6 +126,17 @@ def load_corpus(path: Path) -> Corpus:
         raise ValueError("Incomplete corpus or duplicate identities")
     fingerprint = hashlib.sha256(canonical(manifest["artifacts"])).hexdigest()
     return Corpus(records, sequences, vocabulary, fingerprint)
+
+
+def _compact_token(value: object) -> Token:
+    if not isinstance(value, list) or len(value) not in (3, 4):
+        raise ValueError("Invalid compact token")
+    if len(value) == 4:
+        start, end, segment, term = value
+    else:
+        start, end, term = value
+        segment = 0
+    return Token(term, start, end, segment)
 
 
 def validate_minimum(minimum: int) -> None:

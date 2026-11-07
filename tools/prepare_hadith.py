@@ -1,11 +1,13 @@
 """Build a deterministic prepared corpus from pinned Open-Hadith-Data CSV files.
 
-The six canonical books are downloaded at a pinned commit, verified by SHA-256,
-and converted to the four artifacts the index builder consumes:
+Sahih al-Bukhari and Sahih Muslim are downloaded at a pinned commit, verified
+by SHA-256, and converted to the four artifacts the index builder consumes:
 
     records.jsonl  tokens.jsonl  validation.json  manifest.json
 
-Run with ``python -m tools.prepare_hadith``.
+Both generated JSONL files are deliberately compact: records keep only the
+fields the runtime uses, and tokens are arrays instead of repeated key/value
+objects. Run with ``python -m tools.prepare_hadith``.
 """
 
 from __future__ import annotations
@@ -20,7 +22,6 @@ import tempfile
 import unicodedata
 import urllib.request
 from collections import Counter
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,7 @@ DEFAULT_LOCK = ROOT / "tools" / "hadith-sources.json"
 DEFAULT_RAW = ROOT / "data" / "raw"
 DEFAULT_OUTPUT = ROOT / "data" / "prepared"
 OUTPUTS = ("records.jsonl", "tokens.jsonl", "validation.json", "manifest.json")
-VERSIONS = {"records": 1, "tokens": 1, "manifest": 1, "normalization": NORMALIZATION_VERSION}
+VERSIONS = {"records": 2, "tokens": 2, "manifest": 1, "normalization": NORMALIZATION_VERSION}
 
 # Directional controls, zero-width characters and byte-order marks are layout
 # hints in the source files, not part of the narration.
@@ -124,36 +125,24 @@ def derive(
     configs: list[dict[str, Any]], raw_dir: Path
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    urn = 0
     for config in sorted(configs, key=lambda c: c["collection"]):
         collection = config["collection"]
         path = raw_dir / f"{config['name']}.csv"
         rows = read_csv(path, collection)
         for seq, (number, text) in enumerate(rows, 1):
-            urn += 1
             records.append(
                 {
                     "hadith_key": f"{collection}:{number}",
-                    "urn": urn,
-                    "seq": seq,
                     "collection": collection,
-                    "language": "ar",
                     "hadith_number": number,
-                    "number_sort": int(number),
-                    "book_number": 0,
-                    "in_book_number": int(number),
-                    "sunnah_url": None,
+                    "seq": seq,
                     "text": text,
-                    "grades": [],
-                    "n_grades": 0,
-                    "grade_summary": None,
-                    "is_muallaq": False,
                 }
             )
 
     keys = {r["hadith_key"] for r in records}
-    urns = {r["urn"] for r in records}
-    if len(keys) != len(records) or len(urns) != len(records):
+    identities = {(r["collection"], r["seq"]) for r in records}
+    if len(keys) != len(records) or len(identities) != len(records):
         raise DataError("Duplicate hadith identity after conversion")
     if records != sorted(records, key=lambda r: (r["collection"], r["seq"])):
         raise DataError("Records are not in deterministic collection/sequence order")
@@ -169,7 +158,12 @@ def derive(
         token_rows.append(
             {
                 "hadith_key": record["hadith_key"],
-                "tokens": [asdict(token) for token in result.tokens],
+                "tokens": [
+                    [token.start, token.end, token.segment, token.term]
+                    if token.segment
+                    else [token.start, token.end, token.term]
+                    for token in result.tokens
+                ],
             }
         )
         for token in result.tokens:

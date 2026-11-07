@@ -853,8 +853,8 @@
   </main>
 
   <footer class="foot">
-    <p>Hadith are matched against the six canonical books — Bukhari, Muslim, Abu Dawud, Tirmidhi, Nasa'i and Ibn Majah — as digitised by Open-Hadith-Data. Hadith numbers follow that edition, not sunnah.com. A match shows the wording occurs in the source; it is not an authentication of the text you pasted.</p>
-    <p class="source">Text: <a href="https://github.com/mhashim6/Open-Hadith-Data" target="_blank" rel="noopener noreferrer">Open-Hadith-Data</a><br>Engine: MIT · six-book index</p>
+    <p>Hadith are matched against Sahih al-Bukhari and Sahih Muslim as digitised by Open-Hadith-Data. Hadith numbers follow that edition, not sunnah.com. A match shows the wording occurs in the source; it is not an authentication of the text you pasted.</p>
+    <p class="source">Text: <a href="https://github.com/mhashim6/Open-Hadith-Data" target="_blank" rel="noopener noreferrer">Open-Hadith-Data</a><br>Engine: MIT · Bukhari + Muslim index</p>
   </footer>
 </div>
 
@@ -906,11 +906,7 @@ const state = {
 
 const COLLECTION_NAMES = {
   bukhari: "Sahih al-Bukhari",
-  muslim: "Sahih Muslim",
-  abudawud: "Sunan Abi Dawud",
-  tirmidhi: "Jami` at-Tirmidhi",
-  nasai: "Sunan an-Nasa'i",
-  ibnmajah: "Sunan Ibn Majah"
+  muslim: "Sahih Muslim"
 };
 const collectionName = (c) => COLLECTION_NAMES[c] || (c ? c.charAt(0).toUpperCase() + c.slice(1) : "Unknown");
 const hadithLabel = (h) => h ? collectionName(h.collection) + " · " + h.hadith_number : "Hadith passage";
@@ -990,7 +986,7 @@ async function detect() {
   const original = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Detecting…';
-  setStatus("Searching the six books…");
+  setStatus("Searching Bukhari and Muslim…");
   try {
     const res = await fetch("/detect", {
       method: "POST",

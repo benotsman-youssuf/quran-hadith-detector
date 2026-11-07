@@ -2,7 +2,7 @@
 
 Combines two offline libraries behind one HTTP API:
   * quran-detector  (QDetect rewrite, El-Beltagy & Rafea 2021) -> Quran verses
-  * hadith_engine   (vendored MIT detector, six canonical books) -> Hadith quotations
+  * hadith_engine   (vendored MIT detector, Sahih al-Bukhari + Sahih Muslim) -> Hadith quotations
 
 Run:  uvicorn app:app --host 0.0.0.0 --port 8000
 UI:   http://localhost:8000/        API docs: http://localhost:8000/docs
@@ -32,14 +32,14 @@ MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "200000"))
 MAX_BATCH = int(os.getenv("MAX_BATCH", "100"))
 STATIC_DIR = Path(__file__).parent / "static"
 
-HADITH_COVERAGE = ["bukhari", "muslim", "abudawud", "tirmidhi", "nasai", "ibnmajah"]
+HADITH_COVERAGE = ["bukhari", "muslim"]
 HADITH_SOURCE = "Open-Hadith-Data (mhashim6)"
 
 DISCLAIMER = (
-    "Matches are textual only. Hadith coverage is the six canonical books as digitised "
-    "by Open-Hadith-Data, so no match does not mean no hadith. Hadith numbers follow that "
-    "edition, not sunnah.com. A match is not an authentication of the quoted wording: "
-    "verify against a printed edition."
+    "Matches are textual only. Hadith coverage is Sahih al-Bukhari and Sahih Muslim "
+    "as digitised by Open-Hadith-Data, so no match does not mean no hadith. Hadith "
+    "numbers follow that edition, not sunnah.com. A match is not an authentication "
+    "of the quoted wording: verify against a printed edition."
 )
 
 # --------------------------------------------------------------------------- #

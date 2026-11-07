@@ -24,7 +24,9 @@ from hadith_engine._resources import (
     LAYOUTS,
     MAGIC,
     MAX_U32,
+    RECORDS_VERSION,
     RESOURCE_FILES,
+    TOKENS_VERSION,
     Resources,
     canonical,
     checksum,
@@ -156,8 +158,8 @@ def build(corpus_dir: Path, output_dir: Path) -> dict:
             "versions": {
                 "index": INDEX_VERSION,
                 "manifest": 1,
-                "records": 1,
-                "tokens": 1,
+                "records": RECORDS_VERSION,
+                "tokens": TOKENS_VERSION,
                 "normalization": NORMALIZATION_VERSION,
             },
             "counts": {

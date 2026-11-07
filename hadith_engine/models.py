@@ -3,35 +3,64 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 
 @dataclass(frozen=True)
 class HadithRecord:
     hadith_key: str
-    urn: int
-    seq: int
-    collection: str
-    language: str
-    hadith_number: str
-    number_sort: int
-    book_number: int
-    in_book_number: int
-    sunnah_url: str | None
-    text: str
-    grades: list[dict[str, Any]]
-    n_grades: int
-    grade_summary: str | None
-    is_muallaq: bool
-    additional_metadata: dict[str, Any]
+    urn: int = 0
+    seq: int = 0
+    collection: str = ""
+    language: str = "ar"
+    hadith_number: str = ""
+    number_sort: int = 0
+    book_number: int = 0
+    in_book_number: int = 0
+    sunnah_url: str | None = None
+    text: str = ""
+    grades: list[dict[str, Any]] = field(default_factory=list)
+    n_grades: int = 0
+    grade_summary: str | None = None
+    is_muallaq: bool = False
+    additional_metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def _from_source(cls, source: dict[str, Any]) -> HadithRecord:
+        """Materialise a result from a full or compact source record.
+
+        Runtime records only carry identity, sequence and text; the remaining
+        fields are restored from their documented defaults here.
+        """
+        hadith_key = source["hadith_key"]
+        _, _, key_number = hadith_key.partition(":")
+        collection = source.get("collection") or hadith_key.partition(":")[0]
+        hadith_number = source.get("hadith_number") or key_number
+        number_sort = source.get("number_sort")
+        if number_sort is None:
+            number_sort = int(hadith_number) if hadith_number.isdigit() else 0
+        seq = source.get("seq") or number_sort or 1
         names = {f.name for f in fields(cls)} - {"additional_metadata"}
         return cls(
-            **{name: deepcopy(source[name]) for name in names},
-            additional_metadata={k: deepcopy(v) for k, v in source.items() if k not in names},
+            hadith_key=hadith_key,
+            urn=source.get("urn") or seq,
+            seq=seq,
+            collection=collection,
+            language=source.get("language", "ar"),
+            hadith_number=hadith_number,
+            number_sort=number_sort,
+            book_number=source.get("book_number", 0),
+            in_book_number=source.get("in_book_number", number_sort),
+            sunnah_url=source.get("sunnah_url"),
+            text=source.get("text", ""),
+            grades=deepcopy(source.get("grades", [])),
+            n_grades=source.get("n_grades", 0),
+            grade_summary=source.get("grade_summary"),
+            is_muallaq=source.get("is_muallaq", False),
+            additional_metadata={
+                key: deepcopy(value) for key, value in source.items() if key not in names
+            },
         )
 
     @classmethod

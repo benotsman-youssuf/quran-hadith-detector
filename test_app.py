@@ -36,10 +36,6 @@ def test_health(client):
     assert body["hadith_coverage"] == [
         "bukhari",
         "muslim",
-        "abudawud",
-        "tirmidhi",
-        "nasai",
-        "ibnmajah",
     ]
     assert body["hadith_engine"]
     assert body["hadith_source"].startswith("Open-Hadith-Data")
@@ -69,22 +65,6 @@ COLLECTION_QUERIES = {
         "شَيْبَةَ حَدَّثَنَا وَكِيعٌ عَنْ شُعْبَةَ عَنْ الْحَكَمِ عَنْ عَبْدِ الرَّحْمَنِ "
         "بْنِ أَبِي لَيْلَى عَنْ سَمُرَةَ بْنِ"
     ),
-    "abudawud": (
-        "ابْنَ مُحَمَّدٍ عَنْ مُحَمَّدٍ يَعْنِي ابْنَ عَمْرٍو عَنْ أَبِي سَلَمَةَ عَنْ "
-        "الْمُغِيرَةِ بْنِ شُعْبَةَ أَنَّ النَّبِيَّ"
-    ),
-    "tirmidhi": (
-        "عَنْ النَّبِيِّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ لَا تُقْبَلُ صَلَاةٌ "
-        "بِغَيْرِ طُهُورٍ وَلَا صَدَقَةٌ مِنْ غُلُولٍ"
-    ),
-    "nasai": (
-        "هُرَيْرَةَ أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ إِذَا "
-        "اسْتَيْقَظَ أَحَدُكُمْ مِنْ نَوْمِهِ فَلَا يَغْمِسْ يَدَهُ"
-    ),
-    "ibnmajah": (
-        "عَنْ أَبِي صَالِحٍ عَنْ أَبِي هُرَيْرَةَ قَالَ قَالَ رَسُولُ اللَّهِ صَلَّى "
-        "اللَّهُ عَلَيْهِ وَسَلَّمَ مَا أَمَرْتُكُمْ"
-    ),
 }
 
 
@@ -100,7 +80,7 @@ def test_hadith_detected_with_source_metadata(client):
     assert all(r["numbering"] == "Open-Hadith-Data edition" for r in refs)
 
 
-def test_all_six_collections_are_indexed(client):
+def test_both_sahih_collections_are_indexed(client):
     for collection, query in COLLECTION_QUERIES.items():
         data = post(client, query, quran=False, max_references=10)
         keys = {r["hadith_key"] for s in data["spans"] for r in s["hadith"]}

@@ -71,23 +71,53 @@ def _span(start: Any, end: Any, text: Any = None) -> tuple[int, int]:
 
 def record(value: Any) -> HadithRecord:
     names = {f.name for f in fields(HadithRecord)} - {"additional_metadata"}
-    if not isinstance(value, dict) or not names <= value.keys():
+    if not isinstance(value, dict) or any(not isinstance(k, str) for k in value):
         raise ValueError("Missing record fields")
-    _json(value)
+    source = dict(value)
+    key = source.get("hadith_key")
+    if not isinstance(key, str) or not key:
+        raise ValueError("Missing record fields")
+    collection, separator, number = key.partition(":")
+    if not separator or not collection or not number:
+        raise ValueError("Invalid record identity")
+    source.setdefault("collection", collection)
+    source.setdefault("hadith_number", number)
+    source.setdefault("language", "ar")
+    source.setdefault("text", "")
+    sequence = source.get("seq", source.get("urn"))
+    if sequence is None:
+        sequence = int(number) if number.isdigit() else 1
+    sequence = max(sequence, 1) if isinstance(sequence, int) else sequence
+    source.setdefault("seq", sequence)
+    source.setdefault("urn", sequence)
+    number_sort = source.get("number_sort")
+    if number_sort is None:
+        number_sort = int(number) if number.isdigit() else 0
+    source.setdefault("number_sort", number_sort)
+    source.setdefault("book_number", 0)
+    source.setdefault("in_book_number", number_sort)
+    source.setdefault("sunnah_url", None)
+    source.setdefault("grades", [])
+    source.setdefault("n_grades", 0)
+    source.setdefault("grade_summary", None)
+    source.setdefault("is_muallaq", False)
+    if not names <= source.keys():
+        raise ValueError("Missing record fields")
+    _json(source)
     for name in ("hadith_key", "collection", "language", "hadith_number", "text"):
-        if not _string(value[name]) and name != "text":
+        if not _string(source[name]) and name != "text":
             raise ValueError("Record identity fields cannot be empty")
     for name in ("urn", "seq", "number_sort", "book_number", "in_book_number", "n_grades"):
-        _integer(value[name], 1 if name in ("urn", "seq") else 0)
+        _integer(source[name], 1 if name in ("urn", "seq") else 0)
     for name in ("sunnah_url", "grade_summary"):
-        if value[name] is not None:
-            _string(value[name])
-    if not isinstance(value["is_muallaq"], bool):
+        if source[name] is not None:
+            _string(source[name])
+    if not isinstance(source["is_muallaq"], bool):
         raise TypeError("is_muallaq must be a boolean")
-    grades = _list(value["grades"])
-    if any(not isinstance(g, dict) for g in grades) or len(grades) != value["n_grades"]:
+    grades = _list(source["grades"])
+    if any(not isinstance(g, dict) for g in grades) or len(grades) != source["n_grades"]:
         raise ValueError("Invalid grades or grade count")
-    return HadithRecord._from_source(value)
+    return HadithRecord._from_source(source)
 
 
 def word(value: Any) -> WordAlignment:

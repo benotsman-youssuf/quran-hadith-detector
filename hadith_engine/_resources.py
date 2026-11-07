@@ -15,6 +15,8 @@ from ._marisa import TrigramLookup, WordLookup, load_tries
 from ._text import NORMALIZATION_VERSION, Token
 
 INDEX_VERSION = 2
+RECORDS_VERSION = 2
+TOKENS_VERSION = 2
 MAGIC = b"HDIDX002"
 HEADER = struct.Struct("<8sIIIIQ")
 BLOCK = struct.Struct("<QI")
@@ -149,32 +151,26 @@ def query_sequence(tokens: tuple[Token, ...], vocabulary: WordLookup) -> Sequenc
 
 
 def validate_record(record: Any) -> dict[str, Any]:
+    """Validate the compact runtime record written by the index builder.
+
+    Runtime records keep only ``hadith_key``, ``collection``, ``hadith_number``,
+    ``seq`` and ``text``. Defaults for the remaining ``HadithRecord`` fields are
+    supplied when a detection result is materialised, so this schema stays small
+    on disk and in memory without changing the public result objects.
+    """
     if not isinstance(record, dict):
         raise ValueError("Source record must be an object")
-    for field in ("hadith_key", "collection", "language", "hadith_number"):
-        if not isinstance(record.get(field), str) or not record[field]:
+    if set(record) != {"hadith_key", "collection", "hadith_number", "seq", "text"}:
+        raise ValueError("Invalid source record fields")
+    for field in ("hadith_key", "collection", "hadith_number"):
+        if not isinstance(record[field], str) or not record[field]:
             raise ValueError(f"Invalid source identity field: {field}")
     if record["hadith_key"] != f"{record['collection']}:{record['hadith_number']}":
         raise ValueError("Source identity/number mismatch")
-    for field in ("urn", "seq", "number_sort", "book_number", "in_book_number", "n_grades"):
-        if not integer(record.get(field)):
-            raise ValueError(f"Invalid source integer field: {field}")
-    if not record["urn"] or not record["seq"] or record["language"] != "ar":
-        raise ValueError("Invalid source sequence/URN/language")
-    for field in ("sunnah_url", "grade_summary"):
-        if field not in record or (
-            record[field] is not None and not isinstance(record[field], str)
-        ):
-            raise ValueError(f"Invalid source nullable field: {field}")
-    if not isinstance(record.get("text"), str) or not isinstance(record.get("is_muallaq"), bool):
-        raise ValueError("Invalid source text/flag")
-    if not isinstance(record.get("grades"), list) or len(record["grades"]) != record["n_grades"]:
-        raise ValueError("Invalid source grades")
-    for grade in record["grades"]:
-        if not isinstance(grade, dict) or any(
-            not isinstance(grade.get(k), str) for k in ("grade", "grader")
-        ):
-            raise ValueError("Invalid source nested grade")
+    if not integer(record["seq"]) or not record["seq"]:
+        raise ValueError("Invalid source sequence")
+    if not isinstance(record["text"], str) or not record["text"]:
+        raise ValueError("Invalid source text")
     return cast(dict[str, Any], record)
 
 
@@ -200,8 +196,8 @@ class Resources:
         versions = {
             "index": INDEX_VERSION,
             "manifest": 1,
-            "records": 1,
-            "tokens": 1,
+            "records": RECORDS_VERSION,
+            "tokens": TOKENS_VERSION,
             "normalization": NORMALIZATION_VERSION,
         }
         if (
@@ -242,10 +238,11 @@ class Resources:
                     records.append(validate_record(json.loads(line, parse_constant=_reject_number)))
             except (UnicodeError, json.JSONDecodeError) as exc:
                 raise ValueError("Invalid records JSONL") from exc
+        for urn, record in enumerate(records, 1):
+            record["urn"] = urn
         if (
             len(records) != counts["records"]
             or len({r["hadith_key"] for r in records}) != len(records)
-            or len({r["urn"] for r in records}) != len(records)
             or len({(r["collection"], r["seq"]) for r in records}) != len(records)
             or records != sorted(records, key=lambda r: (r["collection"], r["seq"]))
         ):
