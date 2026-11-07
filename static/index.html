@@ -309,6 +309,36 @@
   .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
   .actions .spacer { flex: 1; }
 
+  .yt-import {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 12px;
+    padding: 9px 11px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: var(--surface-2);
+  }
+  .yt-import .yt-label { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+  .yt-import input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: .84rem;
+  }
+  .yt-import input:focus { outline: none; border-color: var(--q); box-shadow: 0 0 0 3px var(--q-soft); }
+  .yt-import .secondary { padding: 7px 11px; font-size: .8rem; white-space: nowrap; }
+  @media (max-width: 560px) {
+    .yt-import { flex-wrap: wrap; }
+    .yt-import .yt-label { width: 100%; white-space: normal; }
+    .yt-import input { flex-basis: 100%; }
+  }
+
   button { font: inherit; cursor: pointer; }
   .primary {
     display: inline-flex;
@@ -757,7 +787,7 @@
       </span>
     </a>
     <div class="topbar-actions">
-      <span class="status-pill"><span class="dot" aria-hidden="true"></span> Runs offline</span>
+      <span class="status-pill"><span class="dot" aria-hidden="true"></span> Offline detection</span>
       <button class="icon-btn" id="theme" type="button" aria-label="Switch to dark mode"></button>
     </div>
   </div>
@@ -768,7 +798,7 @@
     <div>
       <p class="eyebrow">Arabic textual detection</p>
       <h1>Find Quran verses and hadith in any Arabic text.</h1>
-      <p class="lede">Paste a khutbah, an article, or a quotation. Every recognised passage is highlighted in place, with its source wording and reference beside it — all locally, with no network calls at runtime.</p>
+      <p class="lede">Paste a khutbah, an article, a quotation, or a YouTube link with captions. Every recognised passage is highlighted in place, with its source wording and reference beside it — detection runs locally, and only the optional YouTube import needs a network.</p>
     </div>
     <div class="legend" aria-label="Highlight legend">
       <p class="legend-title">Legend</p>
@@ -796,6 +826,11 @@
             <button class="ghost" id="sample" type="button">Load an example</button>
             <span><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> to detect</span>
           </div>
+        </div>
+        <div class="yt-import">
+          <label class="yt-label" for="ytUrl">or import a YouTube transcript</label>
+          <input id="ytUrl" type="url" dir="ltr" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://youtu.be/…">
+          <button class="secondary" id="ytGo" type="button">Fetch</button>
         </div>
         <div class="actions">
           <button class="primary" id="go" type="button">
@@ -854,7 +889,7 @@
 
   <footer class="foot">
     <p>Hadith are matched against Sahih al-Bukhari and Sahih Muslim as digitised by Open-Hadith-Data. Hadith numbers follow that edition, not sunnah.com. A match shows the wording occurs in the source; it is not an authentication of the text you pasted.</p>
-    <p class="source">Text: <a href="https://github.com/mhashim6/Open-Hadith-Data" target="_blank" rel="noopener noreferrer">Open-Hadith-Data</a><br>Engine: MIT · Bukhari + Muslim index</p>
+    <p class="source">Text: <a href="https://github.com/mhashim6/Open-Hadith-Data" target="_blank" rel="noopener noreferrer">Open-Hadith-Data</a><br>Engine: MIT · Bukhari + Muslim index<br>Transcripts: yt-dlp (captions only)</p>
   </footer>
 </div>
 
@@ -1022,6 +1057,44 @@ async function detect() {
   } finally {
     btn.innerHTML = original;
     updateCount();
+  }
+}
+
+async function importYoutube() {
+  const url = $("ytUrl").value.trim();
+  if (!url) {
+    setStatus("Paste a YouTube video URL first.", true);
+    $("ytUrl").focus();
+    return;
+  }
+  const btn = $("ytGo");
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Fetching…';
+  setStatus("Fetching the YouTube transcript…");
+  try {
+    const res = await fetch("/youtube/transcript", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url, lang: "ar", fallback: true })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail || "Could not fetch the transcript (" + res.status + ").");
+    }
+    if (!data.text) throw new Error("This video returned an empty transcript.");
+    $("input").value = data.text;
+    updateCount();
+    setStatus("Loaded " + data.text_length.toLocaleString("en") + " characters from " +
+      (data.title || "the video") + " (" + data.language + ", " +
+      (data.automatic ? "automatic" : "manual") + " captions).");
+    $("input").focus();
+    detect();
+  } catch (e) {
+    setStatus(e instanceof TypeError ? "Can't reach the server. Is it still running?" : e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
   }
 }
 
@@ -1355,6 +1428,10 @@ themeBtn.addEventListener("click", () => {
 
 /* ---- events ---- */
 $("go").addEventListener("click", detect);
+$("ytGo").addEventListener("click", importYoutube);
+$("ytUrl").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); importYoutube(); }
+});
 $("sample").addEventListener("click", () => {
   $("input").value = SAMPLE;
   updateCount();

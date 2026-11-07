@@ -1,9 +1,17 @@
+import json
 import unicodedata
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import app
+from youtube_transcript import (
+    Transcript,
+    TranscriptError,
+    _parse_json3,
+    _parse_vtt,
+    validate_youtube_url,
+)
 
 def nfc(x):
     """Diacritic marks can be stored in different orders (shadda/fatha); compare canonically."""
@@ -182,3 +190,89 @@ def test_ui_is_served_at_root(client):
     assert 'id="drawer"' in r.text
     assert 'id="drawer-body"' in r.text
     assert "openDrawer" in r.text
+    # YouTube transcript import is available in the compose card
+    assert 'id="ytUrl"' in r.text
+    assert "/youtube/transcript" in r.text
+
+
+@pytest.mark.parametrize(
+    ("url", "video_id"),
+    [
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("https://youtu.be/dQw4w9WgXcQ?t=10", "dQw4w9WgXcQ"),
+        ("https://m.youtube.com/watch?v=dQw4w9WgXcQ&list=abc", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/shorts/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/embed/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("https://music.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+    ],
+)
+def test_youtube_url_validation(url, video_id):
+    assert validate_youtube_url(url) == video_id
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/watch?v=dQw4w9WgXcQ",
+        "javascript:alert(1)",
+        "file:///etc/passwd",
+        "https://www.youtube.com/playlist?list=abc",
+        "https://www.youtube.com/watch?v=short",
+        "not a url",
+    ],
+)
+def test_youtube_url_rejects_unsupported_links(url):
+    with pytest.raises(TranscriptError):
+        validate_youtube_url(url)
+
+
+def test_youtube_json3_parser_joins_segments():
+    payload = json.dumps(
+        {"events": [{"segs": [{"utf8": "إنما "}, {"utf8": "الأعمال"}]}, {"segs": [{"utf8": "بالنيات"}]}]}
+    )
+    assert _parse_json3(payload) == "إنما الأعمال بالنيات"
+
+
+def test_youtube_vtt_parser_strips_markup_and_timestamps():
+    payload = (
+        "WEBVTT\n\n"
+        "00:00:00.000 --> 00:00:01.000\n"
+        "<v Speaker>إنما الأعمال</v>\n\n"
+        "00:00:01.000 --> 00:00:02.000\n"
+        "بالنيات\n"
+    )
+    assert _parse_vtt(payload) == "إنما الأعمال بالنيات"
+
+
+def test_youtube_transcript_endpoint(client, monkeypatch):
+    text = "إنما الأعمال بالنيات"
+    fake = Transcript(
+        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        video_id="dQw4w9WgXcQ",
+        title="Test video",
+        language="ar",
+        automatic=True,
+        text=text,
+        text_length=len(text),
+    )
+    monkeypatch.setattr("app.extract_transcript", lambda *args, **kwargs: fake)
+    r = client.post(
+        "/youtube/transcript",
+        json={"url": "https://youtu.be/dQw4w9WgXcQ", "lang": "ar"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["video_id"] == "dQw4w9WgXcQ"
+    assert body["language"] == "ar"
+    assert body["automatic"] is True
+    assert body["text"] == text
+    assert body["text_length"] == len(text)
+
+
+def test_youtube_transcript_endpoint_rejects_other_hosts(client):
+    r = client.post(
+        "/youtube/transcript",
+        json={"url": "https://example.com/watch?v=dQw4w9WgXcQ"},
+    )
+    assert r.status_code == 422
+    assert "youtube.com" in r.json()["detail"].lower()

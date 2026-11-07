@@ -6,7 +6,9 @@ One HTTP API over two offline libraries:
 - `hadith_engine` – vendored MIT detector (from [`RayenFekih/hadith-detector`](https://github.com/RayenFekih/hadith-detector))
   matching Sahih al-Bukhari and Sahih Muslim
 
-Everything runs locally; no API keys and no network calls at runtime.
+Detection runs locally with no API keys. The optional YouTube transcript importer uses
+[`yt-dlp`](https://github.com/yt-dlp/yt-dlp) to fetch captions from YouTube; audio is never
+downloaded and no speech-to-text model is run.
 
 ## Run
 
@@ -82,8 +84,11 @@ Hadith numbers follow this edition and are not identical to sunnah.com numbering
 
 ## Web UI (`/`)
 
-Paste Arabic text (detection runs on paste, or press **Detect** / Ctrl+Enter).
+Paste Arabic text (detection runs on paste, or press **Detect** / Ctrl+Enter), or paste a
+YouTube link and choose **Fetch** to load the video's captions into the editor.
 
+- The **or import a YouTube transcript** row fetches the Arabic captions when available and falls
+  back to another caption language. The transcript is placed in the editor and detection runs on it.
 - Your text stays exactly as pasted; Quran verses are highlighted green and hadith blue, with a
   legend and a labelled findings list so colour is not the only cue.
 - Click any highlight (or any reference in the list) to open a side drawer with everything about that
@@ -99,7 +104,31 @@ Paste Arabic text (detection runs on paste, or press **Detect** / Ctrl+Enter).
 - Options: turn each detector on/off, hadith minimum words, tolerate small hadith spelling differences.
 - Light and dark themes are available from the top bar.
 
-It is one static file (`static/index.html`, no external requests or fonts), so it works offline.
+The UI is one static file (`static/index.html`, no external requests or fonts), so detection works
+offline. Only the optional YouTube transcript import needs network access.
+
+## YouTube transcript import
+
+`POST /youtube/transcript` fetches a video's manual or automatic captions with
+[`yt-dlp`](https://github.com/yt-dlp/yt-dlp) and returns plain text. It does not download audio and
+does not run speech-to-text, so the video must already have captions.
+
+```bash
+curl -s localhost:8000/youtube/transcript -H 'content-type: application/json' -d '{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "lang": "ar",
+  "fallback": true
+}'
+```
+
+The response is `{url, video_id, title, language, automatic, text, text_length}`. `language` is the
+caption track actually used; `automatic` is `true` when YouTube's auto-generated captions were the
+source. Arabic (`ar`) is requested by default. With `fallback: true` the endpoint uses another
+available caption language when Arabic is missing. Transcripts longer than `MAX_TEXT_CHARS`
+(200,000 by default) are rejected with HTTP 413.
+
+The UI button **Fetch** in the compose card calls the same endpoint, fills the editor, and runs
+detection on the result.
 
 ## API
 
@@ -117,6 +146,8 @@ character offsets `start`/`end` into **your original text** (`text[start:end] ==
 `book_number`, `url`, `source_text`, `source`, `numbering`).
 
 `POST /detect/batch` takes `{"texts": [...]}` and returns one result per text.
+`POST /youtube/transcript` takes `{"url": "...", "lang": "ar", "fallback": true}` and returns the
+video's caption text (see the section above).
 `GET /health` returns library versions, the two collection names, and limits.
 
 ## Options (all optional, per request)
@@ -152,4 +183,6 @@ Env vars: `MAX_TEXT_CHARS` (default 200000), `MAX_BATCH` (default 100), `HADITH_
   (only the part long enough to reach `hadith_min_words` in one narration).
 - Quran char offsets are recovered from the library's word indices by re-tokenising the way it does
   (`pad_symbols(text).split()`). If you upgrade `quran-detector`, re-run the tests.
+- YouTube import depends on the video having captions. Audio-only videos and videos without subtitles
+  are not transcribed. YouTube can also block or rate-limit extraction from some networks.
 - Calls to each engine are serialised with a lock; scale with multiple workers (`--workers N`).

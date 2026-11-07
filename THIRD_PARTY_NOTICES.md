@@ -38,3 +38,11 @@ inclusion in the corpus.
 
 `quran-detector` is installed from PyPI and is not vendored here. See its
 package metadata for its licence and data notices.
+
+## YouTube transcript import
+
+YouTube captions are fetched with
+[`yt-dlp`](https://github.com/yt-dlp/yt-dlp), installed from PyPI and not
+vendored here. `yt-dlp` is released under the Unlicense; see the project for
+the full notice. The importer only reads caption tracks and does not download
+video or audio.

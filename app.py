@@ -27,6 +27,7 @@ from quran_detector import Settings as QuranSettings
 from quran_detector import annotate as quran_annotate
 from quran_detector import detect as quran_detect
 from quran_detector.api import get_engine as get_quran_engine
+from youtube_transcript import TranscriptError, extract_transcript
 
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "200000"))
 MAX_BATCH = int(os.getenv("MAX_BATCH", "100"))
@@ -127,6 +128,29 @@ class DetectResponse(BaseModel):
 
 class BatchResponse(BaseModel):
     results: list[DetectResponse]
+
+
+class YouTubeTranscriptRequest(BaseModel):
+    url: str = Field(..., min_length=1, max_length=2048, description="YouTube video URL")
+    lang: str = Field(
+        "ar",
+        min_length=1,
+        max_length=20,
+        description="Preferred caption language, for example ar or en",
+    )
+    fallback: bool = Field(
+        True, description="Use another available caption language when the preferred one is missing"
+    )
+
+
+class YouTubeTranscriptResponse(BaseModel):
+    url: str
+    video_id: str
+    title: str
+    language: str = Field(..., description="Caption track language actually used")
+    automatic: bool = Field(..., description="True when YouTube's automatic captions were used")
+    text: str
+    text_length: int
 
 
 # --------------------------------------------------------------------------- #
@@ -371,6 +395,25 @@ def detect_batch(req: BatchRequest) -> BatchResponse:
         if len(t) > MAX_TEXT_CHARS:
             raise HTTPException(422, f"texts[{i}] exceeds {MAX_TEXT_CHARS} characters")
     return BatchResponse(results=[run_detection(t, req.options) for t in req.texts])
+
+
+@app.post(
+    "/youtube/transcript",
+    response_model=YouTubeTranscriptResponse,
+    summary="Extract a YouTube transcript",
+)
+def youtube_transcript(req: YouTubeTranscriptRequest) -> YouTubeTranscriptResponse:
+    """Return the video's manual or automatic caption text without downloading audio."""
+    try:
+        transcript = extract_transcript(
+            req.url,
+            lang=req.lang,
+            fallback=req.fallback,
+            max_chars=MAX_TEXT_CHARS,
+        )
+    except TranscriptError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    return YouTubeTranscriptResponse(**transcript.to_dict())
 
 
 def _ver(pkg: str) -> str | None:
